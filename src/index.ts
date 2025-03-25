@@ -2,8 +2,14 @@ import type { Plugin } from 'vite'
 import path from 'node:path'
 import process from 'node:process'
 import micromatch from 'micromatch'
+import fs from 'node:fs/promises'
 
-export interface VitePluginRestartOptions {
+export interface RestartConfig {
+  file: string
+  checkContent?: boolean
+}
+
+export interface VitePluginSmartRestartOptions {
   /**
    * Enable glob support for watcher (it's disabled by Vite, but add this plugin will turn it on by default)
    *
@@ -16,8 +22,9 @@ export interface VitePluginRestartOptions {
   delay?: number
   /**
    * Array of files to watch, changes to those file will trigger a server restart
+   * Can be string, string array, RestartConfig or RestartConfig array
    */
-  restart?: string | string[]
+  restart?: string | RestartConfig | (string | RestartConfig)[]
   /**
    * Array of files to watch, changes to those file will trigger a client full page reload
    */
@@ -34,7 +41,16 @@ function toArray<T>(arr: T | T[] | undefined): T[] {
   return [arr]
 }
 
-function VitePluginRestart(options: VitePluginRestartOptions = {}): Plugin {
+async function isFile(filePath: string) {
+  try {
+      const stats = await fs.stat(filePath);
+      return stats.isFile();
+  } catch (err) {
+      return false; // 路径不存在或无法访问
+  }
+}
+
+function VitePluginSmartRestart(options: VitePluginSmartRestartOptions = {}): Plugin {
   const {
     delay = 500,
     glob: enableGlob = true,
@@ -43,6 +59,7 @@ function VitePluginRestart(options: VitePluginRestartOptions = {}): Plugin {
   let root = process.cwd()
   let reloadGlobs: string[] = []
   let restartGlobs: string[] = []
+  let restartConfigMap = new Map<string, { checkContent: boolean, content?: string }>()
 
   let timerState = 'reload'
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -56,7 +73,7 @@ function VitePluginRestart(options: VitePluginRestartOptions = {}): Plugin {
   }
 
   return {
-    name: `vite-plugin-restart:${i++}`,
+    name: `vite-plugin-smart-estart:${i++}`,
     apply: 'serve',
     config(c) {
       if (!enableGlob)
@@ -67,13 +84,36 @@ function VitePluginRestart(options: VitePluginRestartOptions = {}): Plugin {
         c.server.watch = {}
       c.server.watch.disableGlobbing = false
     },
-    configResolved(config) {
-      // famous last words, but this *appears* to always be an absolute path
-      // with all slashes normalized to forward slashes `/`. this is compatible
-      // with path.posix.join, so we can use it to make an absolute path glob
+    async configResolved(config) {
       root = config.root
 
-      restartGlobs = toArray(options.restart).map(i => path.posix.join(root, i))
+      const processRestartConfig = async (item: string | RestartConfig) => {
+        const config: RestartConfig = typeof item === 'string' 
+          ? { file: item, checkContent: false }
+          : { ...item, checkContent: item.checkContent ?? false }
+        
+        const absolutePath = path.normalize(path.posix.join(root, config.file))
+        restartGlobs.push(absolutePath)
+
+        const checkContent = config.checkContent ?? false;
+        let fileContent = undefined;
+        const isFileTmp = await isFile(absolutePath)
+        if (checkContent && isFileTmp) {
+          fileContent = await fs.readFile(absolutePath, "utf-8")
+          restartConfigMap.set(absolutePath, {
+            checkContent,
+            content: fileContent
+          });
+        }
+      }
+
+      if (options.restart) {
+        const restartConfigs = toArray(options.restart)
+        for (let i = 0; i < restartConfigs.length; i++) {
+          await processRestartConfig(restartConfigs[i])
+        }
+      }
+      
       reloadGlobs = toArray(options.reload).map(i => path.posix.join(root, i))
     },
     configureServer(server) {
@@ -81,12 +121,43 @@ function VitePluginRestart(options: VitePluginRestartOptions = {}): Plugin {
         ...restartGlobs,
         ...reloadGlobs,
       ])
-      server.watcher.on('add', handleFileChange)
-      server.watcher.on('change', handleFileChange)
-      server.watcher.on('unlink', handleFileChange)
 
-      function handleFileChange(file: string) {
+      server.watcher.on("add", handleFileAdd);
+      server.watcher.on("change", handleFileChange);
+      server.watcher.on("unlink", handleFileUnlink);
+
+      function handleFileAdd (file: string) {
+        return handleFileChangeResolve(file, 'add')
+      }
+
+      function handleFileChange (file: string) {
+        return handleFileChangeResolve(file, 'change')
+      }
+
+      function handleFileUnlink (file: string) {
+        return handleFileChangeResolve(file, 'unlink')
+      }
+
+      async function handleFileChangeResolve(file: string, type: string) {
+        file = path.normalize(file)
+
         if (micromatch.isMatch(file, restartGlobs)) {
+          if (type === 'change') {
+            const config = restartConfigMap.get(file)
+            if (config?.checkContent) {
+              try {
+                const newContent = await fs.readFile(file, 'utf-8')
+                if (config.content === newContent) {
+                  return // 内容没有变化，不触发重启
+                }
+                config.content = newContent
+              }
+              catch (error) {
+                console.error(`Failed to read file content: ${file}`, error)
+              }
+            }
+          }
+
           timerState = 'restart'
           schedule(() => {
             server.restart()
@@ -104,4 +175,4 @@ function VitePluginRestart(options: VitePluginRestartOptions = {}): Plugin {
   }
 }
 
-export default VitePluginRestart
+export default VitePluginSmartRestart

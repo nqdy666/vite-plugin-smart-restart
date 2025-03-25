@@ -1,11 +1,11 @@
 import { defineConfig } from 'vite'
-import VitePluginRestart from 'vite-plugin-restart'
+import VitePluginSmartRestart from 'vite-plugin-smart-restart'
 
 export default defineConfig({
   plugins: [
-    VitePluginRestart({
+    VitePluginSmartRestart({
       restart: [
-        'trigger.txt',
+        { file: 'trigger.txt', checkContent: true },
         '../../dist/*.*',
       ],
     }),

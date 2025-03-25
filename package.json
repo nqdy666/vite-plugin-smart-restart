@@ -1,18 +1,17 @@
 {
-  "name": "vite-plugin-restart",
+  "name": "vite-plugin-smart-restart",
   "type": "module",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "packageManager": "pnpm@9.14.2",
   "description": "Custom files/globs to restart Vite server",
-  "author": "antfu <anthonyfu117@hotmail.com>",
+  "author": "nianqin <nianqin.vip@gmail.com>",
   "license": "MIT",
-  "funding": "https://github.com/sponsors/antfu",
-  "homepage": "https://github.com/antfu/vite-plugin-restart",
+  "homepage": "https://github.com/nqdy666/vite-plugin-smart-restart",
   "repository": {
     "type": "git",
-    "url": "https://github.com/antfu/vite-plugin-restart"
+    "url": "https://github.com/nqdy666/vite-plugin-smart-restart"
   },
-  "bugs": "https://github.com/antfu/vite-plugin-restart/issues",
+  "bugs": "https://github.com/nqdy666/vite-plugin-smart-restart/issues",
   "keywords": [
     "vite-plugin"
   ],
