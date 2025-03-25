@@ -1,8 +1,8 @@
 import type { Plugin } from 'vite'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import micromatch from 'micromatch'
-import fs from 'node:fs/promises'
 
 export interface RestartConfig {
   file: string
@@ -43,10 +43,12 @@ function toArray<T>(arr: T | T[] | undefined): T[] {
 
 async function isFile(filePath: string) {
   try {
-      const stats = await fs.stat(filePath);
-      return stats.isFile();
-  } catch (err) {
-      return false; // 路径不存在或无法访问
+    const stats = await fs.stat(filePath)
+    return stats.isFile()
+  }
+  // eslint-disable-next-line unused-imports/no-unused-vars
+  catch (err) {
+    return false // 路径不存在或无法访问
   }
 }
 
@@ -58,8 +60,8 @@ function VitePluginSmartRestart(options: VitePluginSmartRestartOptions = {}): Pl
 
   let root = process.cwd()
   let reloadGlobs: string[] = []
-  let restartGlobs: string[] = []
-  let restartConfigMap = new Map<string, { checkContent: boolean, content?: string }>()
+  const restartGlobs: string[] = []
+  const restartConfigMap = new Map<string, { checkContent: boolean, content?: string }>()
 
   let timerState = 'reload'
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -88,22 +90,22 @@ function VitePluginSmartRestart(options: VitePluginSmartRestartOptions = {}): Pl
       root = config.root
 
       const processRestartConfig = async (item: string | RestartConfig) => {
-        const config: RestartConfig = typeof item === 'string' 
+        const config: RestartConfig = typeof item === 'string'
           ? { file: item, checkContent: false }
           : { ...item, checkContent: item.checkContent ?? false }
-        
+
         const absolutePath = path.normalize(path.posix.join(root, config.file))
         restartGlobs.push(absolutePath)
 
-        const checkContent = config.checkContent ?? false;
-        let fileContent = undefined;
+        const checkContent = config.checkContent ?? false
+        let fileContent
         const isFileTmp = await isFile(absolutePath)
         if (checkContent && isFileTmp) {
-          fileContent = await fs.readFile(absolutePath, "utf-8")
+          fileContent = await fs.readFile(absolutePath, 'utf-8')
           restartConfigMap.set(absolutePath, {
             checkContent,
-            content: fileContent
-          });
+            content: fileContent,
+          })
         }
       }
 
@@ -113,7 +115,7 @@ function VitePluginSmartRestart(options: VitePluginSmartRestartOptions = {}): Pl
           await processRestartConfig(restartConfigs[i])
         }
       }
-      
+
       reloadGlobs = toArray(options.reload).map(i => path.posix.join(root, i))
     },
     configureServer(server) {
@@ -122,19 +124,19 @@ function VitePluginSmartRestart(options: VitePluginSmartRestartOptions = {}): Pl
         ...reloadGlobs,
       ])
 
-      server.watcher.on("add", handleFileAdd);
-      server.watcher.on("change", handleFileChange);
-      server.watcher.on("unlink", handleFileUnlink);
+      server.watcher.on('add', handleFileAdd)
+      server.watcher.on('change', handleFileChange)
+      server.watcher.on('unlink', handleFileUnlink)
 
-      function handleFileAdd (file: string) {
+      function handleFileAdd(file: string) {
         return handleFileChangeResolve(file, 'add')
       }
 
-      function handleFileChange (file: string) {
+      function handleFileChange(file: string) {
         return handleFileChangeResolve(file, 'change')
       }
 
-      function handleFileUnlink (file: string) {
+      function handleFileUnlink(file: string) {
         return handleFileChangeResolve(file, 'unlink')
       }
 

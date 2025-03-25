@@ -33,10 +33,15 @@ export default {
     })
   ],
 }
+```
 
 Changes to `my.config.js` or `my.config.ts` will now restart the server automatically.
 
 or
+
+```ts
+// vite.config.js
+import ViteRestart from 'vite-plugin-smart-restart'
 
 export default {
   plugins: [
@@ -50,7 +55,6 @@ export default {
 ```
 
 File content changes to `.eslintrc-auto-import.json` will now restart the server automatically.
-
 
 ## License
 
